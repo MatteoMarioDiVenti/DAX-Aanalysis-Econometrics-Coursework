@@ -1,0 +1,1154 @@
+---
+title: "Financial Econometrics Coursework"
+author: "Matteo Mario Di Venti"
+date: "02/12/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r libraries used, include=T}
+
+# library(ggplot2)   # produce good looking graphs (qplot)
+library(quantmod)  # allows to easily import data directly from downloading financial data from the internet, directly
+# from some open sources, including Yahoo Finance, Google Finance, and the Federal
+# Reserve Economic Data (FRED) of Federal Reserve Bank of St. Louis.
+library(xts)
+library(readr)
+library(latex2exp) # to wtie latex formulas in graphs!
+#library(gridExtra) # multiple plots in one graph
+library(summarytools)
+library(qwraps2)
+library(normtest)
+library(nortest)
+library(moments)
+library(xtable)
+library(sm)
+library(astsa)
+library(portes)
+#library(xlsx)
+# library(timeSeries)
+library(forecast)
+# install.packages("RColorBrewer")
+library(RColorBrewer)
+#library for root test
+library(tseries)
+
+# WARNING:installation of package "portes" does not work as it should, as the file has been taken out form CRAN due to compativbility issues, still we need it!
+# install.packages('forecast')
+#install.packages("portes_3.0.tar.gz", repos=NULL, type="source")
+# library(forecast)
+library(portes)
+
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r directory and data}
+
+rm(list=ls()) # clear all variables from environment/workspace
+# set working directory (wd)
+mydirectory <- "C:/Users/mmd2218/OneDrive - EDHEC/Desktop/Financial Econometrics with R"
+setwd(mydirectory)
+getwd() # set and show wd 
+# alternatively click on "Session" --> "Set Working Directory" --> "Choose Directory"
+# WARNING: be sure that all the csv files are included in the same working directory!
+############################################################################
+# LOAD data
+# DAX index 
+DAX<- getSymbols("^GDAXI",from="1987-12-30", to="2020-12-30", auto.assign=FALSE)
+DAX<-na.omit(DAX)
+write.zoo(DAX, file="Data_DAX.csv", col.names = TRUE, row.names = FALSE)
+DAXcsv <-  as.xts(read.zoo("Data_DAX.csv", header = TRUE, format = "%Y-%m-%d"))
+DAX <-  as.xts(read.zoo("Data_DAX.csv", header = TRUE, format = "%Y-%m-%d"))
+
+```
+
+```{r Prices and returns, echo=TRUE}
+Pt.d.all  <- DAX$GDAXI.Adjusted ; names(Pt.d.all)  <- "Pt.d" # Prices
+pt.d.all  <- log(Pt.d.all)       ; names(Pt.d.all)  <- "pt.d" # log -prices
+
+# find end of month/week/year dates
+last_day_of_month <- endpoints(pt.d.all, on = "months") # works on xts objects
+last_day_of_week  <- endpoints(pt.d.all, on = "weeks")
+last_day_of_year  <- endpoints(pt.d.all, on = "years")
+
+# Compute weekly (w), monthly(m), and annual(y) log prices
+pt.w.all <- pt.d.all[last_day_of_week] ; names(pt.w.all)   <- "pt.w.all" 
+pt.m.all <- pt.d.all[last_day_of_month]; names(pt.m.all)   <- "pt.m.all"
+pt.y.all <- pt.d.all[last_day_of_year] ; names(pt.y.all)   <- "pt.y.all"
+
+# compute log returns # for entire history of DAX
+rt.d.all  <- diff(pt.d.all)     ; names(rt.d.all)  <- "rt.d"
+rt.w.all  <- diff(pt.w.all)     ; names(rt.w.all)  <- "rt.w"
+rt.m.all  <- diff(pt.m.all)     ; names(rt.m.all)  <- "rt.m"
+rt.y.all  <- diff(pt.y.all)     ; names(rt.y.all)  <- "rt.y"
+
+ss_dates <- "19871230/20201230"
+
+
+Pt.d <- Pt.d.all[ss_dates];
+pt.d <- pt.d.all[ss_dates];
+pt.w <- pt.w.all[ss_dates];
+rt.d <- rt.d.all[ss_dates];
+rt.w <- rt.w.all[ss_dates];
+rt.m <- rt.m.all[ss_dates];
+rt.y <- rt.y.all[ss_dates];
+
+# convert prices int dataframes to produce nice plots
+Pt.d.df <- cbind(index(Pt.d), data.frame(Pt.d)); names(Pt.d.df)[1] <- "date";
+pt.d.df <- cbind(index(pt.d), data.frame(pt.d)); names(pt.d.df)[1] <- "date";
+pt.w.df <- cbind(index(pt.w), data.frame(pt.w)); names(pt.w.df)[1] <- "date";
+rt.d.df <- cbind(index(rt.d), data.frame(rt.d)); names(rt.d.df)[1] <- "date";
+rt.w.df <- cbind(index(rt.w), data.frame(rt.w)); names(rt.w.df)[1] <- "date";
+rt.m.df <- cbind(index(rt.m), data.frame(rt.m)); names(rt.m.df)[1] <- "date";
+rt.y.df <- cbind(index(rt.y), data.frame(rt.y)); names(rt.y.df)[1] <- "date";
+```
+
+```{r plot settings}
+#set up graph palette
+brewer.pal(n=11, name="Spectral")
+palette(brewer.pal(n=11, name="Spectral"))
+#col2plot  <- c("red","blue","black","green")
+lwd2plot  <- c(1    , 1     , 1    )
+lty2plot  <- c(1    , 1     , 1    )
+
+```
+
+```{r prices and returns plots}
+#############################################################################
+# PLOT: Prices, log-prices and log-returns of SP500
+#############################################################################
+
+#postscript(file="../figures/DAX_end1987_2020_Ppr.eps",width=9,height=6,horizontal = FALSE, onefile=FALSE)
+#pdf(returnsplot.pdf)
+#puts figures into 3 rows in 1 col shape
+par(mfrow=c(3,1)); 
+#defines graph margins
+par(mar = c(5, 4, 1, 4)); 
+# par(mgp = c(1.5, 0.5, 0))
+
+
+# Daily Price 
+data2plot <- Pt.d.df; 
+plot(x = data2plot[,1], y = data2plot[,2], type = 'l', col=2   , lty = lty2plot[1], lwd = lwd2plot[1],
+     xlab=""  , ylab=TeX('price: $P_t$'), main="",   xaxt ="none")     # do not diaply x and y-axes labels/ticks) 
+# X-Axis display
+seq_sel <- endpoints(data2plot$date, on = 'years'); date_seq = data2plot$date[seq_sel]; date_lab = format(date_seq,"%b-%y")
+axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0); abline(0,0, lty = 2)
+
+# Daily log price
+data2plot <- pt.d.df; 
+plot(x = data2plot[,1], y = data2plot[,2], type = 'l', col=3   , lty = lty2plot[1], lwd = lwd2plot[1],
+     xlab=""  , ylab=TeX('log-price: $p_t$'), main="",   xaxt ="none")     # do not diaply x and y-axes labels/ticks) 
+# X-Axis display
+seq_sel <- endpoints(data2plot$date, on = 'years'); date_seq = data2plot$date[seq_sel]; date_lab = format(date_seq,"%b-%y")
+axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0)
+abline(0,0, lty = 2)
+
+#-----------------------------------------------------------------------------
+# Daily log-returns 
+data2plot <- rt.d.df; 
+plot(x = data2plot[,1], y = data2plot[,2], type = 'l', col=4   , lty = lty2plot[1], lwd = lwd2plot[1],
+     xlab=TeX("Date")  , ylab=TeX('log-return: $r_t$'), main="",   xaxt ="none")     # do not diaply x and y-axes labels/ticks) 
+# X-Axis display
+seq_sel <- endpoints(data2plot$date, on = 'years'); date_seq = data2plot$date[seq_sel]; date_lab = format(date_seq,"%b-%y")
+axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0); abline(0,0, lty = 2) # add zero line
+```
+
+```{r}
+# PLOT: log-returns of SP500
+#############################################################################
+# Daily log-returns 
+data2plot <- rt.d.df; 
+plot(x = data2plot[,1], y = data2plot[,2], type = 'l', col=8  , lty = lty2plot[1], lwd = lwd2plot[1],
+     xlab=""  , ylab=TeX('$r_t$'),    main=TeX('daily log-return'),   xaxt ="none")     # do not diaply x and y-axes labels/ticks) 
+# X-Axis display
+seq_sel <- endpoints(data2plot$date, on = 'years'); date_seq = data2plot$date[seq_sel]; date_lab = format(date_seq,"%y")
+axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0); abline(0,0, lty = 2) # add zero line
+```
+```{r}
+# scatterplot of log prices: p_t vs. p_{t-1}
+# postscript(file="../figures/SP500_scatter_ptm1_pt.eps",width=9,height=6,horizontal = FALSE, onefile=FALSE) 
+plot(Lag(pt.d.df[,2]), pt.d.df[,2], col = "blue", lwd = 1, cex = 2, xlab=TeX('LAGGED daily log-price ($p_{t-1}$)')  , ylab=TeX('daily log-price ($p_{t}$)'))
+abline(0, 1, lty = 1, lwd = 2, col="red")
+
+
+# compute autocorrelation of order 1 as sample correlation
+cor(Lag(pt.d.df[,2]), pt.d.df[,2], use = "pairwise.complete.obs" )
+```
+
+```{r}
+#test for stationarity with dick-fueller root test
+#since by inspection of graph it has no constant linear trend it is not worth using ADF-GLS
+
+#test for Prices
+#daily log prices
+ADF.d.pt<-adf.test(pt.d.df$Pt.d)
+#daily prices
+ADF.d.Pt<-adf.test(Pt.d.df$pt.d)
+#weekly log prices
+ADF.w.pt<-adf.test(pt.w.df$pt.w.all)
+#monthly log prices
+ADF.m.pt<-adf.test(pt.m.all$pt.m.all)
+
+ADF.y.pt<-adf.test(pt.y.all$pt.y.all)
+
+
+#test for daily returns
+ADF.d.rt<- adf.test(rt.d.df$rt.d[-1])
+#test for weekly returns
+ADF.w.rt<- adf.test(rt.w.df$rt.w[-1])
+#test for monthly returns
+ADF.m.rt<- adf.test(rt.m.df$rt.m[-1])
+
+ADF.y.rt<- adf.test(rt.y.df$rt.y[-1])
+
+
+ADF<-rbind(ADF.d.Pt,ADF.d.pt,ADF.w.pt,ADF.m.pt,ADF.y.pt,ADF.d.rt,ADF.w.rt,ADF.m.rt,ADF.y.rt)
+#report table
+ADF<- as.data.frame(ADF[,-c(2,5,6)])
+ADF <- apply(ADF,2,as.character)
+ADF
+#write.csv(ADF,file='ADF2.csv')
+```
+```{r}
+#ACF
+#postscript(file="../figures/SP500_ACF_pt.eps",width=9,height=6,horizontal = FALSE, onefile=FALSE) 
+acf(pt.d, main="Autocorrelations of the daily Prices")
+```
+
+```{r}
+#----------------------------------------------
+# acf of monthly prices for recent subsample: still persistent!
+ss_dates_temp <- "20101231/20201231"
+# Prices in subsamples
+pt.m.temp <- pt.m.all[ss_dates_temp];
+acf(pt.m.temp, main="Autocorrelations of the monthly Prices")
+
+
+```
+
+```{r}
+# Histogram of daily prices and normal density
+# daily
+
+#postscript(file="../figures/hist_qqplot_SP500.eps",width=9,height=6,horizontal = FALSE, onefile=FALSE)
+par(mfrow=c(2,4))
+data2plot = rt.d.df[,2]; # daily returns 
+hist_OUT <- hist(data2plot, freq = FALSE, breaks = 50, col=10,  xlab="", main=TeX('daily log-return'), )
+norm_y <-  dnorm(hist_OUT$mids, mean=mean(data2plot, na.rm=TRUE), sd=sd(data2plot, na.rm=TRUE));
+lines(x=hist_OUT$mids, y=norm_y,col="red", lwd=1)
+
+data2plot = rt.w.df[,2]; # weekly returns 
+hist_OUT <- hist(data2plot, freq = FALSE, breaks = 40, col=10,  xlab="", main=TeX('weekly log-return'), )
+norm_y <-  dnorm(hist_OUT$mids, mean=mean(data2plot, na.rm=TRUE), sd=sd(data2plot, na.rm=TRUE));
+lines(x=hist_OUT$mids, y=norm_y,col="red", lwd=1)
+
+data2plot = rt.m.df[,2]; # monthly returns 
+hist_OUT <- hist(data2plot, freq = FALSE, breaks = 40, col=10,  xlab="", main=TeX('monthly log-return'), )
+norm_y <-  dnorm(hist_OUT$mids, mean=mean(data2plot, na.rm=TRUE), sd=sd(data2plot, na.rm=TRUE));
+lines(x=hist_OUT$mids, y=norm_y,col="red", lwd=1)
+
+data2plot = rt.y.df[,2]; # yearly returns 
+hist_OUT <- hist(data2plot, freq = FALSE, breaks = 30, col=10,  xlab="", main=TeX('yearly log-return'), )
+norm_y <-  dnorm(hist_OUT$mids, mean=mean(data2plot, na.rm=TRUE), sd=sd(data2plot, na.rm=TRUE));
+lines(x=hist_OUT$mids, y=norm_y,col="red", lwd=1)
+
+# QQ-plot vs quantiles of normal distribution
+qqnorm(rt.d.df[,2], pch = 1, frame = FALSE, xlab="Normal Quantiles")
+qqline(rt.d.df[,2], col = 2, lwd = 2)
+
+qqnorm(rt.w.df[,2], pch = 1, frame = FALSE, xlab="Normal Quantiles")
+qqline(rt.w.df[,2], col = 2, lwd = 2)
+
+qqnorm(rt.m.df[,2], pch = 1, frame = FALSE, xlab="Normal Quantiles")
+qqline(rt.m.df[,2], col = 2, lwd = 2)
+
+qqnorm(rt.y.df[,2], pch = 1, frame = FALSE, xlab="Normal Quantiles")
+qqline(rt.y.df[,2], col = 2, lwd = 2)
+
+```
+
+```{r}
+# QQ-plots: daily, weekly, monthly, annual
+# daily
+
+#postscript(file="../figures/qqplot_sp500annual.eps",width=9,height=6,horizontal = FALSE, onefile=FALSE) 
+par(mfrow=c(2,2))
+
+qqnorm(rt.d.df[-1,2], pch = 1, frame = FALSE, xlab="Normal Quantiles", main=TeX('daily log-return'))
+qqline(rt.d.df[-1,2], col = 2, lwd = 2)
+
+qqnorm(rt.w.df[-1,2], pch = 1, frame = FALSE, xlab="Normal Quantiles", main=TeX('weekly log-return'))
+qqline(rt.w.df[-1,2], col = 2, lwd = 2)
+
+qqnorm(rt.m.df[-1,2], pch = 1, frame = FALSE, xlab="Normal Quantiles", main=TeX('monthly log-return'))
+qqline(rt.m.df[-1,2], col = 2, lwd = 2)
+
+qqnorm(rt.y.df[-1,2], pch = 1, frame = FALSE, xlab="Normal Quantiles", main=TeX('annual log-return'))
+qqline(rt.y.df[-1,2], col = 2, lwd = 2)
+```
+
+```{r}
+# Kernel density of : similar to a smooth histogram!
+##########################################################################################
+data2plot <- rt.d.df[-1,2]; # daily returns
+mean.data <- mean(data2plot, na.rm=TRUE)
+sd.data   <- sd(data2plot, na.rm=TRUE)
+
+density.eval.points <- seq(from = min(data2plot), to = max(data2plot), length.out = 300)
+
+sm.density.out <- sm.density(data2plot, h = 0.05, eval.points = density.eval.points, dispaly="none", col=1)
+sm.density.out<- sm.density(data2plot, h = 0.0017, eval.points = density.eval.points, dispaly="none", col=2)
+sm.density.out <- sm.density(data2plot, h = 0.0016, eval.points = density.eval.points, dispaly="none", col=3)
+sm.density.out <- sm.density(data2plot, h = 0.0015, eval.points = density.eval.points, dispaly="none", col=4)
+
+```
+
+
+```{r}
+# h is the 'bandwidth parameter': --> the larger the bandwidth, the smoother the histogram
+sm.density.out.default <- sm.density(data2plot, eval.points = density.eval.points, dispaly="none")
+# different bandwidth can produce different kernel densities.....
+
+# R default function is:
+d <- density(data2plot)
+plot(d)
+norm_y <-  dnorm(sm.density.out$eval.points, mean=mean(data2plot, na.rm=TRUE), sd=sd(data2plot, na.rm=TRUE));
+#stud_y<- dt(sm.density.out$eval.points,df=1)
+lines(x=sm.density.out$eval.points, y=norm_y,col="red", lwd=2, lty=1)
+ 
+```
+
+```{r}
+# Kernel density and histogram, with normal distribution on top!
+##########################################################################################
+
+##########################################################################################
+# Uses 'sm' package: controls parameters of kernel smoothing
+#postscript(file="../figures/hist_kern_SP500daily.eps",width=12,height=6,horizontal = FALSE, onefile=FALSE) 
+par(mfrow=c(1,2))
+plot(x=sm.density.out$eval.points, y=sm.density.out$estimate ,xlim =c(-0.06,0.06), typ = "l", col=10, lwd = 2,
+     xlab = TeX('Daily returns'), ylab = TeX('Density'), main=TeX('Kernel density: daily log-return'))
+norm_y <-  dnorm(sm.density.out$eval.points, mean=mean(data2plot, na.rm=TRUE), sd=sd(data2plot, na.rm=TRUE));
+lines(x=sm.density.out$eval.points, y=norm_y,col="red", lwd=2, lty=1)
+abline(v = mean(data2plot), col="black", lwd=1, lty=2)
+#legend("topleft", legend=c("Kernel desnity: data" , "Normal"),
+#       col=c("blue", "red"), lwd=c(2,1),lty=c(1,2))
+
+hist_OUT <- hist(data2plot, freq = FALSE, breaks = 70, col=10,  xlab = TeX('Daily returns'), main=TeX('Histogram: daily log-return'), )
+norm_y <-  dnorm(hist_OUT$mids, mean=mean(data2plot, na.rm=TRUE), sd=sd(data2plot, na.rm=TRUE));
+lines(x=hist_OUT$mids, y=norm_y,col="red", lwd=1, lty=1)
+#legend("topleft", legend=c("Histogram: data" , "Normal"), col=c("lightgreen", "red"), lwd=c(1.75,1),lty=c(1,1))
+
+```
+
+```{r}
+##########################################################################################
+# simple plot: Kernel density of annual data
+data2plot <- rt.y.df[-1,2]
+sm.density(data2plot)
+```
+
+
+```{r}
+###########################################################################################
+###########################################################################################
+# # more advanced kernel density plot (NOT SHOWN IN THE SLIDES !!!!)
+ density.eval.points <- seq(from = min(data2plot), to = max(data2plot), length.out = 300)
+ sm.density.out <- sm.density(data2plot, h = 0.08, eval.points = density.eval.points)
+ plot(x=sm.density.out$eval.points, y=sm.density.out$estimate ,xlim =c(-0.5,0.5), typ = "l", col="blue", lwd = 2,
+      xlab = TeX('Annual returns'), ylab = TeX('Density'), main="Kernel density plot vs Normal for annual returns")
+ norm_y <-  dnorm(sm.density.out$eval.points, mean=mean(data2plot, na.rm=TRUE), sd=sd(data2plot, na.rm=TRUE));
+ lines(x=sm.density.out$eval.points, y=norm_y,col="red", lwd=2, lty=2)
+ abline(v = mean(data2plot), col="black", lwd=1, lty=2)
+ points(data2plot, rep(0,length(data2plot)), pch='|')
+```
+
+
+```{r}
+##############################################
+# QQ plot of annual data
+qqnorm(rt.y.df[,2], pch = 1, frame = FALSE, xlab="Normal Quantiles")
+qqline(rt.y.df[,2], col = 2, lwd = 2)
+
+```
+
+```{r}
+# SUMMARY STATISICS
+######################################################################
+
+######################################################################
+# very intuitive use of individual R functions
+# some summary statistics...not really the ones we want!
+summary(rt.d.df[,2])
+
+# Sample Skewness,    note the difference:
+skewness(rt.d.df[,2], na.rm = TRUE)
+##MDV## #gives NA so need to remove NA
+moments::skewness(rt.d.df[,2], na.rm= T)
+# pay attention.....I have loaded the package moment, which contains a 'skewness'  function
+#   but there are other packages with skewness functions....
+# same with kurtosis!
+# I prefer the skewness, kurtosis, and all other moments form the package 'moments'...
+# which by default divides the summations of the estimators by 1/T ....
+
+
+# Sample Kurtosis,
+kurtosis(rt.d.df[,2], na.rm= T) # daily
+kurtosis(rt.m.df[,2], na.rm= T) # monthly
+kurtosis(rt.y.df[,2], na.rm= T) # annual -> much smaller!
+
+####################################################
+# OPTIONAL : some nicer descriptive statics. Note that Skewness and Kurtosis are computed differently from how we defined them in class!
+# function form package 'summarytools'
+
+mydata <- descr(rt.d.df[,2], style = "rmarkdown")
+View(mydata)
+st_options(round.digits=4) 
+#####goooood shit#####
+# Produces latex:
+summary_table(rt.d.df)
+#######
+
+print(descr(rt.m.df))
+```
+
+```{r}
+# compute Normality tests and sample summary statistics
+library(tseries)
+#Jarque-Bera Normality tests 
+jarque.bera.test(rt.d.df[-1,2])
+jarque.bera.test(rt.w.df[-1,2])
+jarque.bera.test(rt.m.df[-1,2]) # the '-1' removes the first observation (a NA) so that NA are not an issue!
+jarque.bera.test(rt.y.df[-1,2])
+#################################################
+#################################################
+#################################################
+# Produce Summary statistics for ANNUAL data only
+data <- rt.y.df[-1,2]; T<-length(data) 
+
+# JB test statistics computed manually from formula in the slides:
+((T/6)*(skewness(data))^2)+ (T/24*(kurtosis(data)-3)^2)
+# JB test statistics computed form function: they are exactly the same...if moments package is used ot compute skenwss and kurtosis!
+jb.norm.test(data)
+jarque.bera.test(data)
+
+# #perfomr JB test manually
+a<-jarque.bera.test(data)$statistic
+x <- data 
+n <- length(x)         ## Number of observations
+m1 <- sum(x)/n         ## Mean
+m2 <- sum((x-m1)^2)/n  ## Used in denominator of both
+m3 <- sum((x-m1)^3)/n  ## For numerator of S
+m4 <- sum((x-m1)^4)/n  ## For numerator of K
+b1 <- (m3/m2^(3/2))^2  ## S
+b2 <- (m4/m2^2)        ## K
+STATISTIC <- n*b1/6+n*(b2-3)^2/24; STATISTIC
+
+# p-value of JB statics: we can compute it! Computes quantile of chi^2
+?pchisq 
+# method 1: compute area below chi2 for interval
+# (-inf, STATISTICS)
+one.minus.p_jb <- pchisq(STATISTIC,2); 
+1 - one.minus.p_jb
+
+# method 2: compute area below chi2 for interval
+# (STATISTICS, +inf)
+p_jb <- pchisq(STATISTIC,2, lower.tail = F); p_jb
+jarque.bera.test(rt.y.df[-1,2])
+
+
+# different ways to compute skewness !!!!!
+c(T,n)
+c(skewness(data), m3/m2^(3/2))
+c(moments::skewness(data), m3/m2^(3/2))
+c(timeDate::skewness(data), m3/m2^(3/2))
+
+# MANUAL COMPUTATION of  JB TEST FOR DAILY DATA
+# T.JB <- 16862
+# S.JB <- -1.0017
+# K.JB <- 30.1344
+# JB.stat <- (T.JB/6)*(S.JB^2) + (T.JB/24)*((K.JB-3)^2)
+# JB.stat
+# pchisq(520114,df=2)
+
+# DIFFERENT NORMLAITY TESTS:
+jarque.bera.test(data)           # Jarqu-Bera 
+ks.test(rt.y.df[-1,2], "pnorm")  # Kolmogorov Smirnov --> 
+ad.test(rt.y.df[-1,2])           # Anderson Dalring test for normlaity
+lillie.test(rt.y.df[-1,2])       # Lilliefors test
+lillie.test(rnorm(100, mean = 5, sd = 3)) # try Lilliefors test on normally distributed data
+
+
+```
+
+```{r}
+# GENERATES TABLE EXACTLY EQUAL TO THE ON IN SLIDE N. 91
+#######################################################################
+#######################################################################
+# personalized table of summary statistics
+# creates a 'list' with the data of DAX sampled at different frequencies
+# a list is needed and not a matrix / dataframe as the vectors have different lengths!!!
+X <-list("daily" = rt.d.df[-1,2],
+         "weekly" = rt.w.df[-1,2],
+         "montly" = rt.m.df[-1,2],
+         "annual" = rt.y.df[-1,2]);
+
+# list of daily data with and without 87 crash!
+#X.d.87crash.YN <-list("daily all" = rt.d.df[-1,2],
+#                      "daily NO 87 Crash" =rt.d.all.noOct87crash.df[-1,2])
+
+sum(is.na( rt.d.df[-1,2]))      
+
+#sum(is.na(rt.d.all.noOct87crash.df[-1,2]))
+#which(is.na(rt.d.all.noOct87crash.df))
+#  Create function (named 'multi.fun' which computes the statics that we want on the inpit 'x')
+###############################################
+multi.fun <- function(x) {
+  c(Mean = mean(x)*100, 
+    St.Deviation = sd(x)*100,
+    Diameter.C.I.Mean =  qnorm(0.975)*sqrt(var(x)/length(x))*100,
+    Skewness=moments::skewness(x),
+    Kurtosis=moments::kurtosis(x),
+    Excess.Kurtosis=moments::kurtosis(x)-3,
+    Min    = min(x)*100, 
+    Quant  = quantile(x, probs = 0.05)*100,
+    Quant  = quantile(x, probs = 0.25)*100,
+    Median = quantile(x, probs = 0.50)*100,
+    Quant  = quantile(x, probs = 0.75)*100,
+    Quant  = quantile(x, probs = 0.95)*100,
+    Max    = max(x)*100,
+    Jarque.Bera.stat = jarque.bera.test(x)$statistic,
+    Jarque.Bera.pvalue.X100 = jarque.bera.test(x)$p.value*100,
+    Lillie.test.stat = lillie.test(x)$statistic,
+    Lillie.test.pvalue.X100 = lillie.test(x)$p.value*100,
+    KS.test.stat=ks.test(x, "pnorm")$statistic,
+    KS.test.pvalue.X100 =ks.test(x, "pnorm")$p.value*100,
+    AD.test.stat =ad.test(x)$statistic,
+    AD.test.pvalue.X100 =ad.test(x)$p.value*100,
+    
+    
+    N.obs = length(x) 
+  )}
+###############################################
+# GENRETAES TABLE 1 in slide 91
+a <- sapply(X, multi.fun) # apply function to all elements of list X, 
+# PRINT TABLE 1 ON R console (you can copy-paste frm there to excel directly!)
+print(a)
+# and return results in a nice and tidy table
+round(a, digits = 5) # show nicer-looking table!!!!!
+
+
+
+# save TABLE  on .csv file (to be opened with excel/any other editor) 
+write.csv(a,file='table_try.csv')
+
+# or do copy paste form variable 'editor 'pane'
+##########################################################
+##########################################################
+##########################################################
+##########################################################
+# Compute summary statistics with / without 87 crash data crash data
+# Skip in class: just repetition of what has been done above, with different dataset !
+#a.crash.YN <- sapply(X.d.87crash.YN, multi.fun)
+#round(a.crash.YN, digits = 5) # show nicer-looking table!!!!!
+
+##########################################################
+##########################################################
+ # SHOWS TABLE IN LATEX, too advanced for Master students 
+# modify for the normal thing
+ n_series <- length(X); n_stats  <- nrow(a)
+ digits_m <- rbind(4*(matrix(1,n_stats-1,n_series+1)), 0*(matrix(1,1,n_series+1)))
+ xtable(a, digits = digits_m)
+ 
+##########################################################
+##########################################################
+```
+
+```{r}
+# ACF of returns: Autocorrelation function
+
+# use 'Acf function', and not 'acf', though they are very similar
+
+#postscript(file="../figures/SP500_ACF_rt_dwm_1953_2018.eps",width=9,height=6,horizontal = FALSE, onefile=FALSE) 
+par(mfrow=c(1,4))
+ # chnage the limit
+lag.max.acf = 40;  lim.y.axes = c(-0.2,0.2)
+data2plot = rt.d.df[-1,2]; # daily returns 
+Acf(data2plot, main=TeX('Daily returns : $r_t$'), lag.max = lag.max.acf, xlab = "lag in days", ylim=lim.y.axes, xlim = c(1,40))
+data2plot = rt.w.df[-1,2]; # weekly returns 
+Acf(data2plot, main=TeX('Weekly returns : $r_t^w$'), lag.max = lag.max.acf, xlab = "lag in weeks", ylim=lim.y.axes, xlim = c(1,40))
+data2plot = rt.m.df[-1,2]; # monthly returns 
+Acf(data2plot, main=TeX('Monthly returns : $r_t^m$'), lag.max = lag.max.acf, xlab = "lag in months", ylim=lim.y.axes, xlim = c(1,40))
+
+#no interesting information for yearly results andit just makes other graphs harder to present
+lim.y.axes = c(-0.4,0.4)
+data2plot = rt.y.df[-1,2]; # monthly returns 
+Acf(data2plot, main=TeX('Annual returns : $r_t^y$'), lag.max = lag.max.acf, xlab = "lag in years", ylim=lim.y.axes, xlim = c(1,33))
+```
+
+
+```{r}
+#---------------------------------------------------------
+# display ACF values on R-console: daily data
+my.data <- rt.d.df[-1,2];
+# my.data <- rt.m.df[-1,2];
+# my.data <- rt.d.all.noOct87crash.df[-1,2]
+
+lags.all <- seq(1,25,1);
+acf(my.data, lag.max <- max(lags.all), plot = FALSE)
+
+# Barteltt interval
+1.96/sqrt(length(my.data))
+
+#a<- acf(my.data, max.lag = 19, plot = FALSE)
+#str(a)
+##############################################################
+##############################################################
+# Box-Pierce and Ljung Box tests
+# test only first lag
+Box.test(my.data, lag = 1, type = c("Box-Pierce"), fitdf = 0)
+Box.test(my.data, lag = 1, type = c("Ljung-Box"), fitdf = 0)
+# test all first 5 lags
+Box.test(my.data, lag = 5, type = c("Ljung-Box"), fitdf = 0)
+Box.test(my.data, lag = 5, type = c("Box-Pierce"), fitdf = 0)
+# test 20th lag
+Box.test(my.data, lag = 20, type = c("Ljung-Box"), fitdf = 0)
+Box.test(my.data, lag = 20, type = c("Box-Pierce"), fitdf = 0)
+
+##############################################################
+#############################################################
+
+#to be used
+# a1<- acf2(my.data, max.lag = 19) # computes ACF and PACF (used in time series) !
+
+# Customized table with values of ACF, Box-pierce and Ljung Box statistics
+my.max.lag      <- 25
+lags.all        <- seq(1,my.max.lag,1)
+my.acf          <- acf(my.data, lag.max = my.max.lag, plot = FALSE)
+my.acf.diameter <- qnorm(0.975)/sqrt(length(my.data))
+my.acf.tstat.0  <- (my.acf$acf[-1] - 0)/sqrt(1/length(my.data))
+my.LjungBox     <- LjungBox(my.data, lags=lags.all)
+my.BoxPierce    <- BoxPierce(my.data, lags=lags.all)
+crit.value.5.BP <- qchisq(0.95,lags.all) 
+
+my.table <- cbind(my.BoxPierce[,1],
+                  my.acf$acf[-1],
+                  my.acf.diameter,
+                  my.acf.tstat.0,
+                  my.BoxPierce[,2],
+                  my.BoxPierce[,4],
+                  my.LjungBox[,2],
+                  my.LjungBox[,4],
+                  crit.value.5.BP)
+# change appearance to export more easily !
+my.table.df <-as.data.frame(my.table)
+names(my.table.df)  <- c("lag","acf","acf diam.","acf test","Box-Pierce stat","BP pval","LB stat","LB pval","crit")
+rownames(my.table.df) <-c()
+options(scipen = 999)
+a <- data.matrix(my.table.df) 
+
+round(a, digits = 3) # show nicer-looking table!!!!!
+tab.2.print <- base::round(a,digits=4)
+# show on screen (latex format to export in latex directly from screen!)
+ print(xtable(my.table.df, digits=c(0,0,3,3,3,3,3,3,3,3)), include.rownames=FALSE)
+```
+```{r monthly LB and BP}
+#---------------------------------------------------------
+# display ACF values on R-console: daily data
+#my.data <- rt.d.df[-1,2];
+ my.data <- rt.m.df[-1,2];
+# my.data <- rt.w.df[-1,2]
+# my.data <- rt.y.df[-1,2]
+
+lags.all <- seq(1,25,1);
+acf(my.data, lag.max <- max(lags.all), plot = FALSE)
+
+# Barteltt interval
+1.96/sqrt(length(my.data))
+
+
+
+#to be used
+# a1<- acf2(my.data, max.lag = 19) # computes ACF and PACF (used in time series) !
+
+# Customized table with values of ACF, Box-pierce and Ljung Box statistics
+my.max.lag      <- 25
+lags.all        <- seq(1,my.max.lag,1)
+my.acf          <- acf(my.data, lag.max = my.max.lag, plot = FALSE)
+my.acf.diameter <- qnorm(0.975)/sqrt(length(my.data))
+my.acf.tstat.0  <- (my.acf$acf[-1] - 0)/sqrt(1/length(my.data))
+my.LjungBox     <- LjungBox(my.data, lags=lags.all)
+my.BoxPierce    <- BoxPierce(my.data, lags=lags.all)
+crit.value.5.BP <- qchisq(0.95,lags.all) 
+
+my.table <- cbind(my.BoxPierce[,1],
+                  my.acf$acf[-1],
+                  my.acf.diameter,
+                  my.acf.tstat.0,
+                  my.BoxPierce[,2],
+                  my.BoxPierce[,4],
+                  my.LjungBox[,2],
+                  my.LjungBox[,4],
+                  crit.value.5.BP)
+# change appearance to export more easily !
+my.table.df <-as.data.frame(my.table)
+names(my.table.df)  <- c("lag","acf","acf diam.","acf test","Box-Pierce stat","BP pval","LB stat","LB pval","crit")
+rownames(my.table.df) <-c()
+options(scipen = 999)
+a <- data.matrix(my.table.df) 
+
+round(a, digits = 3) # show nicer-looking table!!!!!
+tab.2.print <- base::round(a,digits=4)
+# show on screen (latex format to export in latex directly from screen!)
+ print(xtable(my.table.df, digits=c(0,0,3,3,3,3,3,3,3,3)), include.rownames=FALSE)
+```
+
+```{r}
+################################################################################
+# Squared RETURNS: ACF
+################################################################################
+################################################################################
+# ACF of squared returns
+#postscript(file="../figures/SP500_ACF_SQUAREDrt_dwm_1953_2018.eps",width=9,height=6,horizontal = FALSE, onefile=FALSE) 
+par(mfrow=c(1,4))
+lag.max.acf = 80;  lim.y.axes = c(-0.10,0.30)
+data2plot = (rt.d.df[,2])^2 ; # daily squared returns 
+Acf(data2plot, main=TeX('Daily squared returns : $r_t^2$'), lag.max = lag.max.acf, xlab = "lag in days", ylim=lim.y.axes)
+data2plot = (rt.w.df[,2])^2; # weekly squared returns 
+Acf(data2plot, main=TeX('Weekly squared returns : $r_t^{w 2}$'), lag.max = lag.max.acf, xlab = "lag in weeks", ylim=lim.y.axes)
+data2plot = (rt.m.df[,2])^2; # monthly squared returns 
+Acf(data2plot, main=TeX('Monthly squared returns : $r_t^{m 2}$'), lag.max = lag.max.acf, xlab = "lag in months", ylim=lim.y.axes)
+lim.y.axes = c(-0.40,0.40)
+data2plot = (rt.y.df[,2])^2; # annual squared returns 
+Acf(data2plot, main=TeX('Annual squared returns : $r_t^{y 2}$'), lag.max = lag.max.acf, xlab = "lag in years", ylim=lim.y.axes)
+```
+
+
+```{r}
+
+##########################################################
+# ACF of absolute returns
+# postscript(file="../figures/SP500_ACF_ABSrt_dwm_1953_2018.eps",width=9,height=6,horizontal = FALSE, onefile=FALSE) 
+par(mfrow=c(1,3))
+lag.max.acf = 80;  lim.y.axes = c(-0.10,0.30)
+data2plot = abs(rt.d.df[,2]) ; # daily abs returns 
+Acf(data2plot, main=TeX('Daily absolute returns : $|r_t|$'), lag.max = lag.max.acf, xlab = "lag in days", ylim=lim.y.axes)
+data2plot = abs(rt.w.df[,2]); # weekly abs returns 
+Acf(data2plot, main=TeX('Weekly absolute returns : $|r_t^w|$'), lag.max = lag.max.acf, xlab = "lag in weeks", ylim=lim.y.axes)
+data2plot = abs(rt.m.df[,2]); # monthly abs returns 
+Acf(data2plot, main=TeX('Monthly absolute returns : $|r_t$^m|'), lag.max = lag.max.acf, xlab = "lag in months", ylim=lim.y.axes)
+
+##########################################################
+```
+
+```{r}
+# LEVERAGE
+#-----------------------------------------------------------
+# CROSS-COVARINACE OF DAILY RETURNS with squared returns
+# uses ccf function
+# omputes the cross-correlation or cross-covariance of two univariate series.
+# reading the help of the function you find:
+# "The lag k value returned by ccf(x, y) estimates the correlation between x[t+k] and y[t]."
+
+ret   = (rt.d.df[-1,2])   ; # daily returns 
+ret2  = (rt.d.df[-1,2])^2 ; # daily SQUARED returns 
+
+
+ss_dates3 <- "19871230/20201230" 
+rt.d.subsamp3 <- rt.d.all[ss_dates3];
+
+# Cross correaltion plot in the slides
+
+dev.off()
+#postscript(file="../figures/SP500_corr_rtmj_rt2_1988_2018.eps",width=9,height=6,horizontal = FALSE, onefile=FALSE)
+par(mfrow=c(1,1))
+ss_dates3 <- "19871231/20201231"
+rt.d.subsamp3 <- rt.d.all[ss_dates3];
+ret  <- as.numeric(rt.d.subsamp3); ret2 <- ret^2
+ccf(ret, ret2, lag.max = 10, type = "correlation",  plot = TRUE, 
+    main=TeX('Cross-coorrelation between daily $r_{t+j}$ and $r_t^2$ = corr($r_{t+j}$, $r_{t}^2$)'), 
+    xlab = TeX('lag $j$ in days'), ylab=TeX('Cross-correlation'))
+
+##########################################################
+##########################################################
+```
+
+
+```{r, include=FALSE}
+#---------------------------------------------------------
+# VIX vs. sp500 returns
+# daily values of VIX:
+#VIX.d.all  <- VIX$VIX.Adjusted ; names(VIX.d.all)  <- "VIX.d"
+
+#a <- merge(pt.d,VIX.d.all) # merge two datasets (log prices and VIX ) with different legths --> NA are kept
+#b <- diff(a)               # compute changes in pt and VIX conmpared to previus period
+
+#a.df <- cbind(index(a), data.frame(a)); names(a.df)[1] <- "date";
+#b.df <- cbind(index(b), data.frame(b)); names(b.df)[1] <- "date";
+
+#a.comp <- a.df[complete.cases(a.df),] # remove all rows in which there is at least one NA -> generate balanced (complete) matrix
+#b.comp <- b.df[complete.cases(b.df),]
+
+#head(a.comp); tail(a.comp)
+#head(b.comp); tail(b.comp)
+
+```
+
+```{r, include=FALSE}
+# Level of SP500 and VIX ('a.comp' matrix)
+#################################################
+#postscript(file="../figures/SP500_VIX_1988_2018.eps",width=8,height=6,horizontal = FALSE, onefile=FALSE)
+#par(mfrow=c(1,1))
+#data2plot <- a.comp;
+#plot(x = data2plot[,1], y = data2plot[,2], type ="l", ylab=TeX("SP 500 (blue)"),    main=TeX('SP500 (left, blue) and VIX (right, red) indexes'),   
+#     xlab="", xaxt ="none",   col = "blue", lwd =2)
+#par(new = TRUE)
+#plot(x = data2plot[,1], y = data2plot[,3], type = "l", xaxt = "n", yaxt = "n",
+#     ylab = "", xlab = "", col = "red", lty = 1)
+#axis(side = 4)
+#mtext("VIX", side = 4, line = 3)
+#seq_sel <- endpoints(data2plot$date, on = 'years'); date_seq = data2plot$date[seq_sel]; date_lab = format(date_seq,"%b-%y")
+#axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0); 
+#dev.off()
+# changes of SP500 vs change VIX
+# postscript(file="../figures/SP500_corr_rt_dVIX_1988_2018.eps",width=8,height=6,horizontal = FALSE, onefile=FALSE)
+#par(mfrow=c(1,1))
+#data2plot <- b.comp;
+#plot(x = data2plot[,2], y = data2plot[,3], xlab=TeX("SP 500 log return"),    main=TeX('($VIX_t-VIX_{t-1}$) vs. $r_t$'),   
+#     ylab="VIX Change", col = "blue", lwd =1)
+#abline(lm(data2plot[,3]~data2plot[,2]), col="red", lwd=2) # regression line (y~x) 
+#dev.off()
+#######################################################################################
+```
+
+```{r}
+# cross - correlations in the different SUBSAMPLES (not in slides!) 
+ret2  = (rt.d.df[-1,2])^2 ; # daily squared returns 
+ret   = (rt.d.df[-1,2])   ; # daily returns 
+# subsamples:
+ss_dates1 <- "19900101/20181231"
+ss_dates2 <- "19970101/20181231"
+ss_dates3 <- "19980101/20181231" # we look at this sample: after 87 crash, till end 2018
+ss_dates4 <- "20000101/20181231"
+
+rt.d.subsamp1 <- rt.d.all[ss_dates1];
+rt.d.subsamp2 <- rt.d.all[ss_dates2];
+rt.d.subsamp3 <- rt.d.all[ss_dates3];
+rt.d.subsamp4 <- rt.d.all[ss_dates4];
+#----------------------------------------------------------------
+dev.off()
+par(mfrow=c(2,4))
+# Cross-correlations between lagged and future return, and squared returns
+# Subsamp 1
+ret  <- as.numeric(rt.d.subsamp1); ret2 <- ret^2
+ccf(ret, ret2, lag.max = 10, type = "correlation",  plot = TRUE)
+# Subsamp 2
+ret  <- as.numeric(rt.d.subsamp2); ret2 <- ret^2
+ccf(ret, ret2, lag.max = 10, type = "correlation",  plot = TRUE)
+# Subsamp 3
+ret  <- as.numeric(rt.d.subsamp3); ret2 <- ret^2
+ccf(ret, ret2, lag.max = 10, type = "correlation",  plot = TRUE)
+# Subsamp 4
+ret  <- as.numeric(rt.d.subsamp3); ret2 <- ret^2
+ccf(ret, ret2, lag.max = 10, type = "correlation",  plot = TRUE)
+#----------------------------------------------------------------
+# cross-covariances
+# Subsamp 1
+ret  <- as.numeric(rt.d.subsamp1); ret2 <- ret^2
+ccf(ret, ret2, lag.max = 10, type = "covariance",  plot = TRUE)
+# Subsamp 2
+ret  <- as.numeric(rt.d.subsamp2); ret2 <- ret^2
+ccf(ret, ret2, lag.max = 10, type = "covariance",  plot = TRUE)
+# Subsamp 3
+ret  <- as.numeric(rt.d.subsamp3); ret2 <- ret^2
+ccf(ret, ret2, lag.max = 10, type = "covariance",  plot = TRUE)
+# Subsamp 4
+ret  <- as.numeric(rt.d.subsamp3); ret2 <- ret^2
+ccf(ret, ret2, lag.max = 10, type = "covariance",  plot = TRUE)
+#################################################################
+#################################################################
+#################################################################
+#################################################################
+#################################################################
+#################################################################
+#  Other manual computations to check results in the slides :
+# Confidence interval
+(0.9701/sqrt(16862))*qnorm(0.975)
+cl = 0.0276 - (0.9701/sqrt(16862))*qnorm(0.975)
+cu = 0.0276 - (0.9701/sqrt(16862))*qnorm(0.975)
+ci = c(cl,cu)
+
+stat.test = 0.0276/(0.9701/sqrt(16862))
+0.009701*252
+22.89/0.97
+(-22.900-0.0276)/0.970
+#######################################################################################
+```
+
+```{r QQplot t}
+ par(mfrow=c(1,4), pty="s")
+ nu.t <- 3;
+ my.data <- rt.d.df[,2];
+ samp.size <- length(my.data);
+ seq.quant <- (seq(1,samp.size,1) -0.5)/samp.size;
+ y.qqplot <- scale(my.data);
+ x.qqplot <- (1/sqrt( (nu.t/(nu.t-2))) )*qt(seq.quant,df=nu.t);
+ qqplot(x.qqplot, y.qqplot, main="Location scale Q-Q Plot", ylab="Sample standardized  Quantiles", xlab="standardized t(3)")
+ abline(0,1,col="blue", lwd = 2) 
+
+ nu.t <- 4;
+ my.data <- rt.d.df[,2];
+ samp.size <- length(my.data);
+ seq.quant <- (seq(1,samp.size,1) -0.5)/samp.size;
+ y.qqplot <- scale(my.data);
+ x.qqplot <- (1/sqrt( (nu.t/(nu.t-2))) )*qt(seq.quant,df=nu.t);
+ qqplot(x.qqplot, y.qqplot, main="Location scale Q-Q Plot", ylab="Sample standardized Quantiles", xlab="Standardized t(4)")
+ abline(0,1,col="blue", lwd = 2) 
+
+ #
+ nu.t <- 5;
+ my.data <- rt.d.df[,2];
+ samp.size <- length(my.data);
+ seq.quant <- (seq(1,samp.size,1) -0.5)/samp.size;
+ y.qqplot <- scale(my.data);
+ x.qqplot <- (1/sqrt( (nu.t/(nu.t-2))) )*qt(seq.quant,df=nu.t);
+ qqplot(x.qqplot, y.qqplot, main="Location scale Q-Q Plot", ylab="Sample standardized Quantiles", xlab="standardized t(5)")
+ abline(0,1,col="blue", lwd = 2) 
+ 
+ nu.t <- 6;
+ my.data <- rt.d.df[,2];
+ samp.size <- length(my.data);
+ seq.quant <- (seq(1,samp.size,1) -0.5)/samp.size;
+ y.qqplot <- scale(my.data);
+ x.qqplot <- (1/sqrt( (nu.t/(nu.t-2))) )*qt(seq.quant,df=nu.t);
+ qqplot(x.qqplot, y.qqplot, main="Location scale Q-Q Plot", ylab="Sample standardized Quantiles", xlab="standardized t(6)")
+ abline(0,1,col="blue", lwd = 2)  
+ 
+ dev.off()
+```
+
+```{r, include=FALSE}
+# ROBUSTENSS: same analysis with and without 87 crash !
+# check results yourself ..... they are not in the slides still they are interesting.....
+##########################################################
+##########################################################
+# ACF daily rtns with and without 87 crash
+#par(mfrow=c(1,2))
+#lag.max.acf = 80;  lim.y.axes = c(-0.10,0.30)
+#data2plot = rt.d.df[-1,2] ; # daily squared returns 
+#Acf(data2plot, main=TeX('Daily returns : $r_t$'), lag.max = lag.max.acf, xlab = "lag in days", ylim=lim.y.axes)
+#data2plot = rt.d.all.noOct87crash.df[-1,2] ; # daily squared returns 
+#Acf(data2plot, main=TeX('Daily returns : $r_t$, NO 87 CRASH'), lag.max = lag.max.acf, xlab = "lag in days", ylim=lim.y.axes)
+
+##########################################################
+# ACF daily squared rtns with and without 87 crash
+#par(mfrow=c(1,2))
+#lag.max.acf = 80;  lim.y.axes = c(-0.10,0.40)
+#data2plot = (rt.d.df[-1,2])^2 ; # daily squared returns 
+#Acf(data2plot, main=TeX('Daily squared returns : $r_t^2$'), lag.max = lag.max.acf, xlab = "lag in days", ylim=lim.y.axes)
+#data2plot = (rt.d.all.noOct87crash.df[-1,2])^2 ; # daily squared returns 
+#Acf(data2plot, main=TeX('Daily squaredvreturns : $r_t^2$, NO 87 CRASH' ), lag.max = lag.max.acf, xlab = "lag in days", ylim=lim.y.axes)
+
+##########################################################
+# ACF daily absolute rtns with and without 87 crash
+# par(mfrow=c(1,2))
+# lag.max.acf = 80;  lim.y.axes = c(-0.10,0.40)
+# data2plot = abs(rt.d.df[-1,2]) ; # daily squared returns 
+# Acf(data2plot, main=TeX('Daily squared returns : $|r_t|$'), lag.max = lag.max.acf, xlab = "lag in days", ylim=lim.y.axes)
+# data2plot = abs(rt.d.all.noOct87crash.df[-1,2]) ; # daily squared returns 
+# Acf(data2plot, main=TeX('Daily squaredvreturns : $|r_t|$, NO 87 CRASH' ), lag.max = lag.max.acf, xlab = "lag in days", ylim=lim.y.axes)
+
+#####################################################################
+#####################################################################
+#####################################################################
+#####################################################################
+```
+
+```{r}
+# ADVANCED: performs Lilliefors test figure as in slides...try to understand code by yourself !
+# NOT IMPORTANT FOR THE EXAM!
+#######################################################
+
+ #######################################################
+# postscript(file="../figures/lillie_test_sp500annual.eps",width=12,height=6,horizontal = FALSE, onefile=FALSE) 
+par(mfrow=c(1,2))
+# my.data <- rt.y.df[-1,2];
+my.data <- rt.y.df[-1,2];
+
+my.data.ordered <- sort(my.data);
+mean.data <-mean(my.data);
+sd.data <-sd(my.data);
+samp.size <- length(my.data)
+seq.ind <- seq(1,samp.size,1);
+emp.cdf <-seq.ind/samp.size
+emp.cdf.2 <-(seq.ind-1)/samp.size
+theor.cdf <- pnorm(my.data.ordered,mean.data,sd.data)
+# plot(y=emp.cdf,  x=my.data.ordered, col="blue", lwd=1, lty=1)
+# points(y=emp.cdf.2,  x=my.data.ordered, col="green", lwd=1, lty=1)
+
+plot(y=emp.cdf,  x=my.data.ordered, col="blue", pch=1, lwd=1, lty=1, cex=0.5, 
+     xlab='DAX sorted annual log returns', ylab='cdf')
+points(y=theor.cdf, x=my.data.ordered, col="red", pch=0,lwd=1, lty=1, cex=0.5)
+legend("topleft", legend=c("Empirical cdf" , "Normal cdf"), pch=c(1,0), col=c("blue", "red"))
+
+KS.L.stat1 = max(abs(emp.cdf-theor.cdf))
+KS.L.stat2 = max(abs(emp.cdf.2-theor.cdf))
+KS.L.stat = max(c(KS.L.stat1,KS.L.stat2))
+KS.L.stat1
+KS.L.stat2
+KS.L.stat
+plot(y=abs(emp.cdf.2-theor.cdf),x=my.data.ordered, type='l',
+     xlab='DAX sorted annual log returns', ylim=c(0,0.3), col='blue')
+abline(h=0.805/sqrt(samp.size),lwd = 4, lty = 1, col='orange')
+abline(h=0.886/sqrt(samp.size),lwd = 4, lty = 1, col='red')
+abline(h=1.031/sqrt(samp.size),lwd = 4, lty = 1, col='darkred')
+text(x=-0.5, y=0.805/sqrt(samp.size)-0.006, TeX('10% crit. value $KS_L$ = 0.1401'),  adj = c(0,0), cex= 0.7)
+text(x=-0.5, y=0.886/sqrt(samp.size)+0.002, TeX('5% crit. value $KS_L$ = 0.1542'),  adj = c(0,0), cex= 0.7)
+text(x=-0.5, y=1.031/sqrt(samp.size)+0.002, TeX('1% crit. value $KS_L$ = 0.1795'),  adj = c(0,0), cex= 0.7)
+text(x=-0.5, y=0.032, TeX('$ G(\\tilde{x}_t)-\\Phi(\\tilde{x}_t, \\hat{\\mu}, \\hat{\\sigma}^2)$'),  adj = c(0,0))
+
+# Critical values of Lilliefors test for T = length dataset
+c(0.805,0.886,1.031)/sqrt(samp.size)
+```
+
+```{r}
+####################################################################
+# Rolling standard deviation on subset of daily data from 1980 to 2018
+ss_dates <- "19871230/20201231"
+rt.d.subsamp <- rt.d.all[ss_dates];
+rt.d.subsamp.df <- cbind(index(rt.d.subsamp), data.frame(rt.d.subsamp)); names(rt.d.subsamp.df)[1] <- "date";
+
+wind.length <- 252; # 1 year of daily data = 252 working days
+####################################################################
+# a <- rollapply(data = rt.d.subsamp.df[,2],
+#                width = wind.length,
+#                function(y){c(mean(y),sd(y),skewness(y),kurtosis(x))},
+#                #by = 252,
+#                align = "right",
+#                by.column=FALSE)
+#####################################################################
+# mean
+roll.mom <- rollapply(data = rt.d.subsamp,
+                      width = wind.length,
+                      function(y){c(mean(y),sd(y),skewness(y),kurtosis(y),
+                                    moment(y, order = 4, central = TRUE))},
+                      align = "right", # save rolling statistics on the last date on which they are computed 
+                      by.column=FALSE)
+?rollapply
+# 
+mean.plot    <- roll.mom[,1];
+mean.plot.ub <- roll.mom[,1]+1.96*roll.mom[,2]/sqrt(wind.length);
+mean.plot.lb <- roll.mom[,1]-1.96*roll.mom[,2]/sqrt(wind.length);
+a <-cbind(mean.plot, mean.plot.lb, mean.plot.ub)
+mean.plot.all <- cbind(index(a), data.frame(a)); names(mean.plot.all)[1] <- "date";
+
+
+data2plot <- mean.plot.all[complete.cases(mean.plot.all),]
+seq.dates.x <- data2plot[,1]
+#postscript(file="../figures/SP500_MEAN_rolling_1981_2018.eps",width=12,height=6,horizontal = FALSE, onefile=FALSE) 
+plot(x = seq.dates.x, y = data2plot[,2]*100, type = 'l', col="blue"   , lty = 1, lwd = 2,
+     xlab=""  , ylab=TeX("mean (in percentage)"),    main=TeX('Rolling mean(on 252 days)  \\%'),   xaxt ="none",
+     ylim=c(-0.5,0.5))     # do not diaply x and y-axes labels/ticks) 
+lines(x=seq.dates.x, y=data2plot[,3]*100, col="red", lwd=1, lty=1)
+lines(x=seq.dates.x, y=data2plot[,4]*100, col="red", lwd=1, lty=1)
+# just to produce nice x axis with dates
+seq_sel  <- endpoints(data2plot$date, on = 'years'); 
+date_seq <- data2plot$date[seq_sel]; 
+date_lab <- format(date_seq,"%y")
+axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0); abline(0,0, lty = 1) # add zero line
+```
+
+```{r}
+# compute rolling mean manually using look: get same results!
+T <- length(rt.d.subsamp);
+# creates empty matrix to store data
+roll.mom.manual <- NA*matrix(0,T,5);
+# run for loop
+for (i in wind.length:T){
+  est.window <- (i-wind.length+1):(i)
+  y <- rt.d.subsamp[est.window]
+  roll.mom.manual[i,1] <- mean(y)
+  roll.mom.manual[i,2] <- sd(y)
+  roll.mom.manual[i,3] <- skewness(y)
+  roll.mom.manual[i,4] <- kurtosis(y)
+  roll.mom.manual[i,5] <- moment(y, order = 4, central = TRUE)
+}
+######################################################################
+# plot results of manually computed rolling mean!
+mean.plot.man    <- roll.mom.manual[,1];
+mean.plot.man.ub <- roll.mom.manual[,1]+1.96*roll.mom.manual[,2]/sqrt(wind.length);
+mean.plot.man.lb <- roll.mom.manual[,1]-1.96*roll.mom.manual[,2]/sqrt(wind.length);
+data2plot.NA <-cbind(mean.plot.man, mean.plot.man.lb, mean.plot.man.ub)
+
+data2plot <- data2plot.NA[complete.cases(data2plot.NA),]
+plot(x = seq.dates.x, y = data2plot[,1]*100, type = 'l', col="blue"   , lty = 1, lwd = 2,
+     xlab=""  , ylab=TeX("mean (in percentage)"),    main=TeX('Rolling mean(on 252 days)  \\%'),   xaxt ="none",
+     ylim=c(-0.5,0.5))     # do not diaply x and y-axes labels/ticks) 
+lines(x=seq.dates.x, y=data2plot[,2]*100, col="red", lwd=1, lty=1)
+lines(x=seq.dates.x, y=data2plot[,3]*100, col="red", lwd=1, lty=1)
+axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0); abline(0,0, lty = 1) # add zero line
+```
+
+```{r}
+# St. deviation
+sd.plot    <- roll.mom[,2];
+mu4        <- roll.mom[,5];
+sd.plot.ub <- roll.mom[,2]+1.96*(1/(2*sd.plot)*sqrt(mu4-sd.plot^4))/sqrt(wind.length);
+sd.plot.lb <- roll.mom[,2]-1.96*(1/(2*sd.plot)*sqrt(mu4-sd.plot^4))/sqrt(wind.length);
+a <-cbind(sd.plot,sd.plot.lb,sd.plot.ub)
+sd.plot.all <- cbind(index(a), data.frame(a)); names(sd.plot.all)[1] <- "date";
+
+
+
+data2plot <- sd.plot.all[complete.cases(sd.plot.all),]
+#postscript(file="../figures/SP500_stdev_rolling_1981_2018.eps",width=12,height=6,horizontal = FALSE, onefile=FALSE) 
+plot(x = seq.dates.x, y = data2plot[,2]*100, type = 'l', col="blue"   , lty = 1, lwd = 2,
+     xlab=""  , ylab=TeX("st.dev (in percentage)"),    main=TeX('Rolling st. dev.(on 252 days)  \\%'),   xaxt ="none",
+     ylim=c(0,4))     # do not diaply x and y-axes labels/ticks) 
+lines(x=seq.dates.x, y=data2plot[,3]*100, col="red", lwd=1, lty=1)
+lines(x=seq.dates.x, y=data2plot[,4]*100, col="red", lwd=1, lty=1)
+axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0); abline(0,0, lty = 1) # add zero line
+```
+
+```{r}
+# Skewness
+skew.plot    <- roll.mom[,3];
+skew.plot.ub <- +1.96*sqrt(6)/sqrt(wind.length);
+skew.plot.lb <- -1.96*sqrt(6)/sqrt(wind.length);
+a <-cbind(skew.plot, skew.plot.lb, skew.plot.ub)
+skew.plot.all <- cbind(index(a), data.frame(a)); names(skew.plot.all)[1] <- "date";
+
+
+data2plot <- skew.plot.all[complete.cases(skew.plot.all),]
+#postscript(file="../figures/SP500_skew_rolling_1981_2018.eps",width=12,height=6,horizontal = FALSE, onefile=FALSE) 
+plot(x = seq.dates.x, y = data2plot[,2], type = 'l', col="blue"   , lty = 1, lwd = 2,
+     xlab=""  , ylab=TeX("skewness"),    main=TeX('Rolling Skewness (on 252 days) '),   xaxt ="none",
+     ylim=c(-4,2))     # do not diaply x and y-axes labels/ticks) 
+lines(x=seq.dates.x, y=data2plot[,3], col="red", lwd=1, lty=1)
+lines(x=seq.dates.x, y=data2plot[,4], col="red", lwd=1, lty=1)
+axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0); abline(0,0, lty = 1) # add zero line
+```
+
+```{r}
+# kurtosis
+kurt.plot    <- roll.mom[,4];
+kurt.plot.ub <- 3+1.96*sqrt(24)/sqrt(wind.length);
+kurt.plot.lb <- 3-1.96*sqrt(24)/sqrt(wind.length);
+a <-cbind(kurt.plot, kurt.plot.lb, kurt.plot.ub)
+kurt.plot.all <- cbind(index(a), data.frame(a)); names(kurt.plot.all)[1] <- "date";
+
+
+data2plot <- kurt.plot.all[complete.cases(skew.plot.all),]
+#postscript(file="../figures/SP500_kurt_rolling_1981_2018.eps",width=12,height=6,horizontal = FALSE, onefile=FALSE) 
+plot(x = seq.dates.x, y = data2plot[,2], type = 'l', col="blue"   , lty = 1, lwd = 2,
+     xlab=""  , ylab=TeX("kurtosis"),    main=TeX('Rolling kurtosis (on 252 days)'),   xaxt ="none",
+     ylim=c(2,11))     # do not diaply x and y-axes labels/ticks) 
+lines(x=seq.dates.x, y=data2plot[,3], col="red", lwd=1, lty=1)
+lines(x=seq.dates.x, y=data2plot[,4], col="red", lwd=1, lty=1)
+axis(1, at = date_seq, label = date_lab, las = 1, cex.axis=1.0); abline(0,0, lty = 1) # add zero line
+```
+
+
