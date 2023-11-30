@@ -48,7 +48,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 rm(list=ls()) # clear all variables from environment/workspace
 # set working directory (wd)
-mydirectory <- "C:/Users/mmd2218/OneDrive - EDHEC/Desktop/Financial Econometrics with R"
+mydirectory <- "C:/please_insert_your_directory_here"
 setwd(mydirectory)
 getwd() # set and show wd 
 # alternatively click on "Session" --> "Set Working Directory" --> "Choose Directory"
